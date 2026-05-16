@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import io
 
-# পেজ সেটআপ
-st.set_page_config(page_title="ডাইনামিক ভাড়া রসিদ জেনারেটর", page_icon="🏠", layout="centered")
+# পেজ কনফিগারেশন
+st.set_page_config(page_title="ডাইনামিক ভাড়া রসিদ জেনারেটর", page_icon="🏡", layout="centered")
 
-st.title("🏠 ডাইনামিক ভাড়া রসিদ জেনারেটর")
-st.write("আপনার এক্সেল (.xlsx) ফাইলটি আপলোড করে এক ক্লিকে সব রসিদ তৈরি করুন।")
+st.title("🏡 ডাইনামিক ভাড়া রসিদ জেনারেটর")
+st.write("আপনার এক্সেল (.xlsx) ফাইলটি আপলোড করে স্ট্যাটাসসহ রসিদ জেনারেট করুন।")
 
 # সংখ্যা রূপান্তর ও কমা ফরম্যাট ফাংশন
 def to_bangla_formatted(num, is_unit=False):
@@ -33,15 +33,14 @@ months_map = {
     "october": "অক্টোবর", "november": "নভেম্বর", "december": "ডিসেম্বর"
 }
 
-# ফাইল আপলোডার উইজেট
-uploaded_file = st.file_uploader("📁 আপনার এক্সেল ফাইলটি এখানে ড্রপ করুন বা ব্রাউজ করুন", type=["xlsx"])
+# এক্সেল ফাইল আপলোডার
+uploaded_file = st.file_uploader("📁 আপনার এক্সেল ফাইলটি আপলোড করুন", type=["xlsx"])
 
 if uploaded_file is not None:
     try:
         df = pd.read_excel(uploaded_file)
-        st.success(f"✅ সফলভাবে {len(df)} টি ফ্ল্যাটের ডাটা লোড হয়েছে!")
+        st.success(f"✅ মোট {len(df)} টি বিল ও রসিদ প্রসেস করার জন্য প্রস্তুত!")
         
-        # জেনারেট বাটন
         if st.button("সব রসিদ একসাথে জেনারেট করুন ✨"):
             st.write("### 📋 জেনারেট হওয়া রসিদসমূহ:")
             
@@ -53,40 +52,55 @@ if uploaded_file is not None:
                 rate = float(row['Rate'])
                 water = float(row['Water'])
                 clean = float(row['Cleaning'])
-                due = float(row['Due'])
-                adv = float(row['Advance'])
+                prev_due = float(row['Due'])      
+                prev_adv = float(row['Advance'])  
+                
+                # Paid কলাম চেক করা
+                paid_amount = float(row['Paid']) if 'Paid' in df.columns else 0.0
 
                 # ক্যালকুলেশন ও রাউন্ডিং
                 mas_bangla = months_map.get(month, month.capitalize())
                 elec_raw = unit * rate
                 elec_final = custom_round(elec_raw)
-                total_final = custom_round((rent + elec_raw + water + clean + due) - adv)
                 
-                # বিল ফরম্যাট ডিজাইন
-                msg = f"""🌟✨ ━━《 🏠 বাড়ি ভাড়ার বিবরণ 🏠 》━━ ✨🌟
-🏡 ফ্ল্যাট: {to_bangla_formatted(flat).upper()}
+                # মোট বিল হিসাব
+                total_bill = custom_round((rent + elec_raw + water + clean + prev_due) - prev_adv)
+                
+                # ডাইনামিক স্ট্যাটাস ও মেসেজ নির্ধারণ
+                current_due = 0
+                current_adv = 0
+                status_msg = ""
+                due_display = "০৳"
+                adv_display = "০৳"
+                
+                if paid_amount < total_bill:
+                    current_due = total_bill - paid_amount
+                    status_msg = "✅ আপনার আংশিক ভাড়া গ্রহণ করা হয়েছে।\n🙏 অনুগ্রহ করে দ্রুত বকেয়াটুকু পরিশোধের চেষ্টা করবেন।"
+                    due_display = f"{to_bangla_formatted(current_due)}৳ ⚠️"
+                elif paid_amount > total_bill:
+                    current_adv = paid_amount - total_bill
+                    status_msg = "🌸 ধন্যবাদ! আপনার অতিরিক্ত জমা টাকা পরবর্তী\nমাসের ভাড়ার সাথে সমন্বয় করা হবে।"
+                    adv_display = f"{to_bangla_formatted(current_adv)}৳ ⭐"
+                else:
+                    status_msg = "✨ আলহামদুলিল্লাহ, আপনার এই মাসের ভাড়া\nসম্পূর্ণ পরিশোধ হয়েছে। ধন্যবাদ। 🤝"
+                    due_display = "০৳ (পরিশোধিত)"
 
+                # রসিদ ফরম্যাট
+                msg = f"""╔══🏡✨ ভাড়ার রসিদ ✨🏡══╗
+📍 ফ্ল্যাট নং: {to_bangla_formatted(flat).upper()}
 📅 মাস: {mas_bangla} ২০২৬
-📋 বিস্তারিত হিসাব:
-━━━━━━━━━━━━━━━━━━━
-🏠 বাড়ি ভাড়া: {to_bangla_formatted(rent)}৳
-⚡ বৈদ্যুতিক বিল: {to_bangla_formatted(unit, is_unit=True)}×{to_bangla_formatted(rate)} = {to_bangla_formatted(elec_final)}৳
-🚿 পানির বিল: {to_bangla_formatted(water)}৳
-🧹🗑 ক্লিনিং ও আবর্জনা বিল: {to_bangla_formatted(clean)}৳
-📌 বকেয়া: {to_bangla_formatted(due)}৳
-💰 অগ্রিম: {to_bangla_formatted(adv)}৳
-━━━━━━━━━━━━━━━━━━━
-💵 মোট পরিশোধযোগ্য: ({to_bangla_formatted(rent)}+{to_bangla_formatted(elec_final)}+{to_bangla_formatted(water)}+{to_bangla_formatted(clean)}+{to_bangla_formatted(due)}-{to_bangla_formatted(adv)})
-🎯 সর্বমোট: {to_bangla_formatted(total_final)}✅
-
-📌 👉 নির্ধারিত সময়ে বিলটি পরিশোধ করবেন
-
-🌟 শুভেচ্ছান্তে,
-💁‍♂️ মারুফ
--------------------------------------------"""
+╠══════════════════════╣
+🏠 মোট ভাড়া            : {to_bangla_formatted(total_bill)}৳
+💵 পরিশোধ করেছেন      : {to_bangla_formatted(paid_amount)}৳
+📌 বকেয়া               : {due_display}
+💰 অগ্রিম               : {adv_display}
+╠══════════════════════╣
+{status_msg}
+🌿 আল্লাহ আপনার রিজিকে বরকত দান করুন।
+╚════ 💁‍♂️ মারুফ ════╝"""
                 
-                # ওয়েব স্ক্রিনে কোড আকারে দেখানো যাতে সহজে কপি করা যায়
+                # স্ক্রিনে রসিদ দেখানো
                 st.code(msg, language=None)
                 
     except Exception as e:
-        st.error(f"ফাইল প্রসেস করতে সমস্যা হয়েছে। নিশ্চিত করুন যে কলামের নামগুলো ঠিক আছে। এরর: {e}")
+        st.error(f"❌ এরর: {e}। অনুগ্রহ করে নিশ্চিত করুন আপনার এক্সেল ফাইলের কলামগুলোর নাম ঠিক আছে কিনা।")
