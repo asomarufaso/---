@@ -1,12 +1,10 @@
 import streamlit as st
-import pandas as pd
-import io
 
 # পেজ কনফিগারেশন
-st.set_page_config(page_title="ডাইনামিক ভাড়া রসিদ জেনারেটর", page_icon="🏡", layout="centered")
+st.set_page_config(page_title="ভাড়া রসিদ জেনারেটর", page_icon="🏡", layout="centered")
 
-st.title("🏡 ডাইনামিক ভাড়া রসিদ জেনারেটর")
-st.write("আপনার এক্সেল (.xlsx) ফাইলটি আপলোড করে স্ট্যাটাসসহ রসিদ জেনারেট করুন।")
+st.title("🏡 ভাড়ার রসিদ জেনারেটর (ম্যানুয়াল এন্ট্রি)")
+st.write("নিচের তথ্যগুলো পূরণ করে তাৎক্ষণিকভাবে রসিদ তৈরি করুন।")
 
 # সংখ্যা রূপান্তর ও কমা ফরম্যাট ফাংশন
 def to_bangla_formatted(num, is_unit=False):
@@ -23,72 +21,61 @@ def to_bangla_formatted(num, is_unit=False):
     
     return "".join(eng_to_bng.get(char, eng_to_bng_char.get(char, char)) for char in formatted_num)
 
-def custom_round(num):
-    return int(num) + 1 if num - int(num) >= 0.5 else int(num)
-
 months_map = {
-    "january": "জানুয়ারি", "february": "ফেব্রুয়ারি", "march": "মার্চ", 
-    "april": "এপ্রিল", "may": "মে", "june": "জুন", 
-    "july": "জুলাই", "august": "আগস্ট", "september": "সেপ্টেম্বর", 
-    "october": "অক্টোবর", "november": "নভেম্বর", "december": "ডিসেম্বর"
+    "January": "জানুয়ারি", "February": "ফেব্রুয়ারি", "March": "মার্চ", 
+    "April": "এপ্রিল", "May": "মে", "June": "জুন", 
+    "July": "জুলাই", "August": "আগস্ট", "September": "সেপ্টেম্বর", 
+    "October": "অক্টোবর", "November": "নভেম্বর", "December": "ডিসেম্বর"
 }
 
-# এক্সেল ফাইল আপলোডার
-uploaded_file = st.file_uploader("📁 আপনার এক্সেল ফাইলটি আপলোড করুন", type=["xlsx"])
+# ইনপুট ফর্ম ডিজাইন
+col1, col2 = st.columns(2)
 
-if uploaded_file is not None:
-    try:
-        df = pd.read_excel(uploaded_file)
-        st.success(f"✅ মোট {len(df)} টি বিল ও রসিদ প্রসেস করার জন্য প্রস্তুত!")
-        
-        if st.button("সব রসিদ একসাথে জেনারেট করুন ✨"):
-            st.write("### 📋 জেনারেট হওয়া রসিদসমূহ:")
-            
-            for index, row in df.iterrows():
-                flat = str(row['Flat'])
-                month = str(row['Month']).strip().lower()
-                rent = float(row['Rent'])
-                unit = float(row['Unit']) 
-                rate = float(row['Rate'])
-                water = float(row['Water'])
-                clean = float(row['Cleaning'])
-                prev_due = float(row['Due'])      
-                prev_adv = float(row['Advance'])  
-                
-                # Paid কলাম চেক করা
-                paid_amount = float(row['Paid']) if 'Paid' in df.columns else 0.0
+with col1:
+    flat_no_raw = st.text_input("📍 ফ্ল্যাট নং (যেমন: 1A বা 2B)", "1A")
+    month_input = st.selectbox("📅 মাস নির্বাচন করুন", list(months_map.keys()))
+    year_raw = st.text_input("📆 বছর", "2026")
 
-                # ক্যালকুলেশন ও রাউন্ডিং
-                mas_bangla = months_map.get(month, month.capitalize())
-                elec_raw = unit * rate
-                elec_final = custom_round(elec_raw)
-                
-                # মোট বিল হিসাব
-                total_bill = custom_round((rent + elec_raw + water + clean + prev_due) - prev_adv)
-                
-                # ডাইনামিক স্ট্যাটাস ও মেসেজ নির্ধারণ
-                current_due = 0
-                current_adv = 0
-                status_msg = ""
-                due_display = "০৳"
-                adv_display = "০৳"
-                
-                if paid_amount < total_bill:
-                    current_due = total_bill - paid_amount
-                    status_msg = "✅ আপনার আংশিক ভাড়া গ্রহণ করা হয়েছে।\n🙏 অনুগ্রহ করে দ্রুত বকেয়াটুকু পরিশোধের চেষ্টা করবেন।"
-                    due_display = f"{to_bangla_formatted(current_due)}৳ ⚠️"
-                elif paid_amount > total_bill:
-                    current_adv = paid_amount - total_bill
-                    status_msg = "🌸 ধন্যবাদ! আপনার অতিরিক্ত জমা টাকা পরবর্তী\nমাসের ভাড়ার সাথে সমন্বয় করা হবে।"
-                    adv_display = f"{to_bangla_formatted(current_adv)}৳ ⭐"
-                else:
-                    status_msg = "✨ আলহামদুলিল্লাহ, আপনার এই মাসের ভাড়া\nসম্পূর্ণ পরিশোধ হয়েছে। ধন্যবাদ। 🤝"
-                    due_display = "০৳ (পরিশোধিত)"
+with col2:
+    total_bill_raw = st.number_input("🏠 মোট ভাড়া (Total Amount)", min_value=0, value=7115, step=1)
+    paid_amount_raw = st.number_input("💵 পরিশোধ করেছেন (Paid Amount)", min_value=0, value=7000, step=1)
+    name = st.text_input("💁‍♂️ শুভেচ্ছান্তে (আপনার নাম)", "মারুফ")
 
-                # রসিদ ফরম্যাট
-                msg = f"""╔══🏡✨ ভাড়ার রসিদ ✨🏡══╗
-📍 ফ্ল্যাট নং: {to_bangla_formatted(flat).upper()}
-📅 মাস: {mas_bangla} ২০২৬
+st.write("---")
+
+# জেনারেট বাটন
+if st.button("রসিদ তৈরি করুন ✨", type="primary"):
+    # কনভার্সন
+    flat_no_bn = to_bangla_formatted(flat_no_raw).upper()
+    year_bn = to_bangla_formatted(year_raw)
+    month_bn = months_map[month_input]
+    
+    total_bill = int(total_bill_raw)
+    paid_amount = int(paid_amount_raw)
+    
+    # ডাইনামিক স্ট্যাটাস ও মেসেজ নির্ধারণ
+    current_due = 0
+    current_adv = 0
+    status_msg = ""
+    due_display = "০৳"
+    adv_display = "০৳"
+    
+    if paid_amount < total_bill:
+        current_due = total_bill - paid_amount
+        status_msg = "✅ আপনার আংশিক ভাড়া গ্রহণ করা হয়েছে।\n🙏 অনুগ্রহ করে দ্রুত বকেয়াটুকু পরিশোধের চেষ্টা করবেন।"
+        due_display = f"{to_bangla_formatted(current_due)}৳ ⚠️"
+    elif paid_amount > total_bill:
+        current_adv = paid_amount - total_bill
+        status_msg = "🌸 ধন্যবাদ! আপনার অতিরিক্ত জমা টাকা পরবর্তী\nমাসের ভাড়ার সাথে সমন্বয় করা হবে।"
+        adv_display = f"{to_bangla_formatted(current_adv)}৳ ⭐"
+    else:
+        status_msg = "✨ আলহামদুলিল্লাহ, আপনার এই মাসের ভাড়া\nসম্পূর্ণ পরিশোধ হয়েছে। ধন্যবাদ। 🤝"
+        due_display = "০৳ (পরিশোধিত)"
+
+    # ফাইনাল রসিদ টেক্সট
+    receipt = f"""╔══🏡✨ ভাড়ার রসিদ ✨🏡══╗
+📍 ফ্ল্যাট নং: {flat_no_bn}
+📅 মাস: {month_bn} {year_bn}
 ╠══════════════════════╣
 🏠 মোট ভাড়া            : {to_bangla_formatted(total_bill)}৳
 💵 পরিশোধ করেছেন      : {to_bangla_formatted(paid_amount)}৳
@@ -97,10 +84,9 @@ if uploaded_file is not None:
 ╠══════════════════════╣
 {status_msg}
 🌿 আল্লাহ আপনার রিজিকে বরকত দান করুন।
-╚════ 💁‍♂️ মারুফ ════╝"""
-                
-                # স্ক্রিনে রসিদ দেখানো
-                st.code(msg, language=None)
-                
-    except Exception as e:
-        st.error(f"❌ এরর: {e}। অনুগ্রহ করে নিশ্চিত করুন আপনার এক্সেল ফাইলের কলামগুলোর নাম ঠিক আছে কিনা।")
+╚════ 💁‍♂️ {name} ════╝"""
+
+    # স্ক্রিনে সুন্দর করে আউটপুট দেখানো
+    st.write("### 📋 আপনার রসিদ রেডি:")
+    st.code(receipt, language=None)
+    st.success("💡 ওপরের রসিদটির ডানদিকের 'Copy' বাটনে ক্লিক করে সহজেই কপি করে হোয়াটসঅ্যাপ বা মেসেঞ্জারে পাঠিয়ে দিন।")
